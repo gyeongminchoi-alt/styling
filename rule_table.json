@@ -1,0 +1,286 @@
+{
+  "rules": [
+    {
+      "key": {
+        "tone": "*",
+        "face_shape": "*",
+        "brow_shape": "*",
+        "hair_type": "*"
+      },
+      "result": {
+        "bangs": "유:시스루(가벼운 질감)",
+        "hair_length": "중단발",
+        "hair_style": [
+          "레이어드",
+          "자연스러운 볼륨"
+        ],
+        "glasses": {
+          "color": "블랙/다크브라운",
+          "style": [
+            "라운드-스퀘어 밸런스"
+          ],
+          "notes": "과하게 튀는 색은 피하고 베이직부터"
+        },
+        "earrings": {
+          "metal": "실버/골드 중 취향",
+          "shape": [
+            "미니 후프"
+          ],
+          "size": "스몰",
+          "notes": "데일리 기본템"
+        }
+      },
+      "meta": {
+        "id": "DEFAULT",
+        "notes": "모든 경우의 기본 추천"
+      }
+    },
+    {
+      "key": {
+        "tone": "쿨",
+        "face_shape": "*",
+        "brow_shape": "*",
+        "hair_type": "*"
+      },
+      "result": {
+        "bangs": "유:시스루(가벼운 질감)",
+        "hair_length": "중단발",
+        "hair_style": [
+          "레이어드",
+          "애쉬/쿨브라운 계열 컬러 추천"
+        ],
+        "glasses": {
+          "color": "실버/블랙/쿨그레이",
+          "style": [
+            "메탈 프레임",
+            "슬림 라인"
+          ],
+          "notes": "쿨톤은 차가운 메탈/그레이 계열이 안정적"
+        },
+        "earrings": {
+          "metal": "실버",
+          "shape": [
+            "드롭(슬림)"
+          ],
+          "size": "미디움",
+          "notes": "쿨톤은 실버/화이트 골드가 잘 받는 편"
+        }
+      },
+      "meta": {
+        "id": "TONE_COOL"
+      }
+    },
+    {
+      "key": {
+        "tone": "웜",
+        "face_shape": "*",
+        "brow_shape": "*",
+        "hair_type": "*"
+      },
+      "result": {
+        "bangs": "유:커튼뱅(부드러운 라인)",
+        "hair_length": "중단발",
+        "hair_style": [
+          "레이어드",
+          "웜브라운/골드브라운 계열 컬러 추천"
+        ],
+        "glasses": {
+          "color": "골드/브라운/베이지",
+          "style": [
+            "얇은 테",
+            "웜 메탈/아세테이트"
+          ],
+          "notes": "웜톤은 골드/브라운 계열이 얼굴에 온기를 더함"
+        },
+        "earrings": {
+          "metal": "골드",
+          "shape": [
+            "후프(라운드)"
+          ],
+          "size": "미디움",
+          "notes": "골드/로즈골드가 잘 어울리는 편"
+        }
+      },
+      "meta": {
+        "id": "TONE_WARM"
+      }
+    },
+    {
+      "key": {
+        "tone": "*",
+        "face_shape": "긴형",
+        "brow_shape": "*",
+        "hair_type": "*"
+      },
+      "result": {
+        "bangs": "유:앞머리(시스루/커튼)로 길이 분산",
+        "hair_length": "중단발~롱",
+        "hair_style": [
+          "사이드 볼륨",
+          "S컬/웨이브"
+        ],
+        "glasses": {
+          "color": "톤에 맞는 베이직",
+          "style": [
+            "세로폭 낮은 프레임",
+            "오벌/라운드"
+          ],
+          "notes": "세로로 길어 보이는 프레임은 피하기"
+        },
+        "earrings": {
+          "metal": "톤에 맞게",
+          "shape": [
+            "볼드 후프/라운드"
+          ],
+          "size": "미디움~라지",
+          "notes": "가로 확장감을 주는 라운드/볼드가 유리"
+        }
+      },
+      "meta": {
+        "id": "FACE_LONG"
+      }
+    },
+    {
+      "key": {
+        "tone": "*",
+        "face_shape": "각진형",
+        "brow_shape": "*",
+        "hair_type": "*"
+      },
+      "result": {
+        "bangs": "유:커튼뱅 or 사이드뱅",
+        "hair_length": "중단발",
+        "hair_style": [
+          "레이어드",
+          "C컬/웨이브"
+        ],
+        "glasses": {
+          "color": "톤에 맞는 베이직",
+          "style": [
+            "라운드",
+            "오벌"
+          ],
+          "notes": "각진 라인 강조하는 각진 프레임은 주의"
+        },
+        "earrings": {
+          "metal": "톤에 맞게",
+          "shape": [
+            "드롭(곡선)",
+            "라운드 스터드"
+          ],
+          "size": "미디움",
+          "notes": "곡선형으로 턱선 각을 완화"
+        }
+      },
+      "meta": {
+        "id": "FACE_ANGULAR"
+      }
+    },
+    {
+      "key": {
+        "tone": "*",
+        "face_shape": "*",
+        "brow_shape": "*",
+        "hair_type": "곱슬"
+      },
+      "result": {
+        "bangs": "유:무겁지 않은 뱅(너무 촘촘한 일자 X)",
+        "hair_length": "중단발~롱",
+        "hair_style": [
+          "레이어드(무게 조절)",
+          "내추럴 웨이브 살리기"
+        ],
+        "glasses": {
+          "color": "톤에 맞는 베이직",
+          "style": [
+            "너무 얇지 않은 프레임"
+          ],
+          "notes": "헤어 볼륨이 있으니 프레임도 존재감 밸런스"
+        },
+        "earrings": {
+          "metal": "톤에 맞게",
+          "shape": [
+            "심플 후프/스터드"
+          ],
+          "size": "스몰~미디움",
+          "notes": "헤어가 화려하면 액세서리는 정돈"
+        }
+      },
+      "meta": {
+        "id": "HAIR_CURLY"
+      }
+    },
+    {
+      "key": {
+        "tone": "*",
+        "face_shape": "*",
+        "brow_shape": "*",
+        "hair_type": "직모"
+      },
+      "result": {
+        "bangs": "유/무 모두 가능(질감 추가 추천)",
+        "hair_length": "단발~롱",
+        "hair_style": [
+          "C컬",
+          "S컬(볼륨 보강)",
+          "레이어드"
+        ],
+        "glasses": {
+          "color": "톤에 맞는 베이직",
+          "style": [
+            "얇은 테도 OK"
+          ],
+          "notes": "직모는 질감/볼륨으로 포인트 주기"
+        },
+        "earrings": {
+          "metal": "톤에 맞게",
+          "shape": [
+            "드롭/후프"
+          ],
+          "size": "스몰~미디움",
+          "notes": "스타일 포인트를 주기 쉬움"
+        }
+      },
+      "meta": {
+        "id": "HAIR_STRAIGHT"
+      }
+    },
+    {
+      "key": {
+        "tone": "쿨",
+        "face_shape": "하트형",
+        "brow_shape": "직선형",
+        "hair_type": "직모"
+      },
+      "result": {
+        "bangs": "유:커튼뱅(이마 폭 완화)",
+        "hair_length": "중단발~롱",
+        "hair_style": [
+          "사이드 레이어",
+          "S컬",
+          "차분한 애쉬브라운"
+        ],
+        "glasses": {
+          "color": "실버/쿨그레이",
+          "style": [
+            "하단이 안정적인 보스턴/오벌"
+          ],
+          "notes": "윗부분이 과하게 두꺼운 프레임은 이마 강조 주의"
+        },
+        "earrings": {
+          "metal": "실버",
+          "shape": [
+            "드롭(아래로 시선)",
+            "티어드롭"
+          ],
+          "size": "미디움",
+          "notes": "턱 쪽에 시선을 주어 균형"
+        }
+      },
+      "meta": {
+        "id": "SPECIFIC_001",
+        "notes": "구체 조합 우선 적용 예시"
+      }
+    }
+  ]
+}
