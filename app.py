@@ -1,4 +1,3 @@
-# app.py
 from __future__ import annotations
 
 import json
@@ -15,32 +14,34 @@ from openai import OpenAI
 # =========================
 # 기본 설정
 # =========================
-st.set_page_config(page_title="얼굴형 기반 미용실 추천", layout="wide")
-st.title("얼굴형 기반 미용실 추천 (Kakao Local + 웹후기 기반 확장검색)")
-st.caption("자가진단 선택 → (GPT 추천 3개: 실존 스타일 용어 제한) → (웹 후기 기반 확장검색) → 근처 미용실 추천")
+st.set_page_config(page_title="얼굴형 기반 헤어스타일 추천", layout="wide")
+st.title("얼굴형 기반 헤어스타일 + 미용실 추천")
+st.caption("자가진단 선택 → GPT 추천 키워드 3개 → (웹 후기 기반 확장검색) → 근처 미용실 추천")
 
 
 # =========================
 # ✅ 실존 헤어스타일/시술 용어 화이트리스트
 # =========================
 STYLE_TERMS = [
-    # 컷/기장
     "단발", "중단발", "장발", "숏컷", "보브컷", "허쉬컷", "레이어드컷", "샤기컷",
     "리프컷", "가일컷", "투블럭", "댄디컷", "크롭컷",
-    # 펌/컬
     "C컬펌", "S컬펌", "빌드펌", "히피펌", "쉐도우펌", "가르마펌", "애즈펌",
     "리젠트펌", "아이롱펌", "볼륨펌", "디지털펌", "셋팅펌",
     "볼륨매직", "매직", "매직셋팅",
-    # 염색/탈색
     "염색", "탈색", "뿌리염색", "옴브레", "발레아쥬",
     "애쉬브라운", "애쉬그레이", "애쉬블루",
     "핑크브라운", "초코브라운", "카키브라운",
-    # 다운/클리닉
     "다운펌", "두피케어", "클리닉",
-    # 앞머리/스타일링
     "시스루뱅", "처피뱅", "풀뱅", "애교머리",
 ]
 STYLE_STOP = {"미용실", "헤어", "컷", "펌", "염색"}
+
+TONE_COLOR_RECO = {
+    "웜": ["초코브라운", "카키브라운", "핑크브라운"],
+    "쿨": ["애쉬브라운", "애쉬그레이", "애쉬블루"],
+}
+
+MOOD_CHOICES = ["청순", "시크", "힙한", "단정한", "귀여운", "세련된", "동안 느낌", "성숙한 느낌"]
 
 
 # =========================
@@ -55,10 +56,6 @@ REQUIRED_IMAGES = [
     "땅콩형.png",
     "육각형.png",
     "둥근형.png",
-    "아치형.png",
-    "직선형.png",
-    "각진형.png",
-    "둥근형(눈썹).png",
     "직모.png",
     "곱슬.png",
 ]
@@ -78,15 +75,11 @@ for p in REQUIRED_IMAGES:
 
 
 # =========================
-# ✅ 배포용 API Key 입력 지원 (Kakao + OpenAI)
-# - Secrets에 있으면 자동 사용
-# - 없으면 사이드바에서 입력
-# - 입력은 세션 동안 유지(session_state)
+# API Key 입력
 # =========================
 st.sidebar.header("🔑 API Key 설정")
 st.sidebar.info("🔐 키는 서버에 저장되지 않으며, 새로고침하면 다시 입력해야 할 수 있어요.")
 
-# Kakao Key
 if "KAKAO_REST_API_KEY" not in st.session_state:
     st.session_state["KAKAO_REST_API_KEY"] = (st.secrets.get("KAKAO_REST_API_KEY", "") or "").strip()
 
@@ -98,7 +91,6 @@ kakao_input = st.sidebar.text_input(
 st.session_state["KAKAO_REST_API_KEY"] = (kakao_input or "").strip()
 KAKAO_REST_API_KEY = st.session_state["KAKAO_REST_API_KEY"]
 
-# OpenAI Key
 if "OPENAI_API_KEY" not in st.session_state:
     st.session_state["OPENAI_API_KEY"] = (st.secrets.get("OPENAI_API_KEY", "") or "").strip()
 
@@ -123,7 +115,6 @@ if not OPENAI_API_KEY:
 
 # =========================
 # UI 카드 렌더 유틸
-# ✅ 선택된 버튼 색칠 + ✅ 한 번 클릭 즉시 반영(rerun)
 # =========================
 def select_card(
     *,
@@ -143,7 +134,6 @@ def select_card(
         st.markdown(desc_md)
 
     btn_type = "primary" if selected else "secondary"
-
     if st.button(button_label, key=button_key, use_container_width=True, type=btn_type):
         st.session_state[session_key] = on_click_value
         st.rerun()
@@ -170,12 +160,29 @@ APP_FACE_TO_RECO_FACE: Dict[str, str] = {
 }
 
 
-def build_auto_terms(app_face_shape: str, max_terms: int = 6) -> List[str]:
-    if not app_face_shape:
-        return ["레이어드컷", "C컬펌", "S컬펌"]
+def build_auto_terms(app_face_shape: str, preferred_length: str, mood: str, max_terms: int = 6) -> List[str]:
     reco_face = APP_FACE_TO_RECO_FACE.get(app_face_shape, "계란형 얼굴")
-    terms = FACE_SHAPE_TO_KEYWORDS.get(reco_face, [])
-    return terms[:max_terms] if terms else ["레이어드컷", "C컬펌", "S컬펌"]
+    terms = FACE_SHAPE_TO_KEYWORDS.get(reco_face, ["레이어드컷", "C컬펌", "S컬펌"]).copy()
+
+    if preferred_length == "짧게":
+        terms = ["숏컷", "보브컷", *terms]
+    elif preferred_length == "길게":
+        terms = ["중단발", "장발", *terms]
+
+    if mood in {"단정한", "세련된"}:
+        terms.append("C컬펌")
+    if mood in {"힙한", "시크"}:
+        terms.extend(["허쉬컷", "레이어드컷"])
+    if mood in {"귀여운", "청순", "동안 느낌"}:
+        terms.extend(["시스루뱅", "S컬펌"])
+
+    uniq = []
+    seen = set()
+    for t in terms:
+        if t in STYLE_TERMS and t not in seen:
+            seen.add(t)
+            uniq.append(t)
+    return uniq[:max_terms]
 
 
 # =========================
@@ -217,35 +224,41 @@ def make_queries_with_openai(
     api_key: str,
     tone: str,
     face_shape: str,
-    brow_shape: str,
     hair_type: str,
+    preferred_length: str,
+    mood: str,
+    current_hair_length: str,
+    bangs_status: str,
+    styling_level: str,
     hint_terms: List[str],
 ) -> Tuple[List[str], List[str]]:
     client = OpenAI(api_key=api_key)
-    allowed = STYLE_TERMS
 
     prompt = f"""
 너는 한국 헤어디자이너야.
-아래 사용자의 자가진단 정보(톤/얼굴형/눈썹/모발)를 바탕으로
-카카오 로컬에서 검색 가능한 "미용실 검색 키워드 3개"를 추천해줘.
+사용자 정보를 바탕으로 카카오 로컬에서 검색 가능한 "미용실 검색 키워드 3개"를 추천해줘.
 
 중요 규칙:
 - 각 query에는 반드시 '미용실' 포함
-- query는 반드시 "허용된 스타일 용어 목록"에서만 골라 조합
+- query는 반드시 허용된 스타일 용어 목록에서만 골라 조합
 - 허용 목록 밖 단어 절대 금지
 - (스타일용어 1~2개 + '미용실')로 간결하게
 
 [사용자 정보]
 - tone: {tone}
 - face_shape: {face_shape}
-- brow_shape: {brow_shape}
 - hair_type: {hair_type}
+- preferred_length: {preferred_length}
+- mood: {mood}
+- current_hair_length: {current_hair_length}
+- bangs_status: {bangs_status}
+- styling_level: {styling_level}
 
-[추천 힌트(우선 고려 가능)]
+[추천 힌트]
 {json.dumps(hint_terms, ensure_ascii=False)}
 
 [허용된 스타일 용어 목록]
-{json.dumps(allowed, ensure_ascii=False)}
+{json.dumps(STYLE_TERMS, ensure_ascii=False)}
 
 출력(JSON만):
 {{
@@ -272,10 +285,9 @@ def make_queries_with_openai(
         recs = obj.get("recommendations", [])
         if isinstance(recs, list):
             for it in recs:
-                if not isinstance(it, dict):
-                    continue
-                queries.append(str(it.get("query", "")).strip())
-                reasons.append(str(it.get("reason", "")).strip())
+                if isinstance(it, dict):
+                    queries.append(str(it.get("query", "")).strip())
+                    reasons.append(str(it.get("reason", "")).strip())
     except Exception:
         queries, reasons = [], []
 
@@ -284,7 +296,7 @@ def make_queries_with_openai(
     seen = set()
 
     for q, r in zip(queries, reasons):
-        fixed = enforce_style_whitelist(q, allowed_terms=allowed)
+        fixed = enforce_style_whitelist(q, allowed_terms=STYLE_TERMS)
         if fixed and fixed not in seen:
             seen.add(fixed)
             final_q.append(fixed)
@@ -330,14 +342,7 @@ def kakao_address_to_xy(address: str) -> Tuple[float, float]:
 
 
 @st.cache_data(show_spinner=False, ttl=600)
-def kakao_keyword_search(
-    query: str,
-    x: float,
-    y: float,
-    radius_m: int = 3000,
-    size: int = 15,
-    page: int = 1,
-) -> List[dict]:
+def kakao_keyword_search(query: str, x: float, y: float, radius_m: int = 3000, size: int = 15, page: int = 1) -> List[dict]:
     url = "https://dapi.kakao.com/v2/local/search/keyword.json"
     params = {
         "query": query,
@@ -378,7 +383,6 @@ def kakao_search_web(query: str, size: int = 5) -> List[dict]:
 
 def build_review_snippet_for_place(place_name: str, area_hint: str) -> str:
     q = f"{place_name} {area_hint} 미용실 후기 펌 컷"
-    blog_docs, web_docs = [], []
     try:
         blog_docs = kakao_search_blog(q, size=5)
     except Exception:
@@ -390,9 +394,9 @@ def build_review_snippet_for_place(place_name: str, area_hint: str) -> str:
 
     parts: List[str] = []
     for d in blog_docs[:5]:
-        parts.append(f"[블로그] {strip_html(d.get('title',''))} - {strip_html(d.get('contents',''))}")
+        parts.append(f"[블로그] {strip_html(d.get('title', ''))} - {strip_html(d.get('contents', ''))}")
     for d in web_docs[:5]:
-        parts.append(f"[웹] {strip_html(d.get('title',''))} - {strip_html(d.get('contents',''))}")
+        parts.append(f"[웹] {strip_html(d.get('title', ''))} - {strip_html(d.get('contents', ''))}")
 
     return " | ".join([p for p in parts if p.strip()])[:2500]
 
@@ -410,8 +414,7 @@ def analyze_styles_from_reviews_with_openai(
     for p in places:
         name = p.get("place_name", "")
         addr = p.get("road_address_name", "") or p.get("address_name", "")
-        snip = review_snippets.get(name, "")
-        payload.append({"name": name, "address": addr, "snippet": snip})
+        payload.append({"name": name, "address": addr, "snippet": review_snippets.get(name, "")})
 
     prompt = f"""
 너는 한국 헤어/미용실 리뷰 분석가야.
@@ -460,11 +463,7 @@ def analyze_styles_from_reviews_with_openai(
     return result
 
 
-def build_expanded_queries_from_tags(
-    chosen_query: str,
-    style_map: Dict[str, Dict],
-    max_queries: int = 3,
-) -> List[str]:
+def build_expanded_queries_from_tags(chosen_query: str, style_map: Dict[str, Dict], max_queries: int = 3) -> List[str]:
     counter = Counter()
     for v in style_map.values():
         for t in v.get("tags", []):
@@ -497,19 +496,12 @@ def merge_places(*lists: List[dict]) -> List[dict]:
     return merged
 
 
-# =========================
-# ✅ 검색결과 잘 나오게: 자동 완화(fallback) + 반경 확대
-# =========================
 def build_fallback_queries(chosen_query: str) -> List[str]:
     q = (chosen_query or "").strip()
     q_no = q.replace("미용실", "").strip()
-    fallbacks = []
-    if q:
-        fallbacks.append(q)
+    fallbacks = [q] if q else []
     if q_no:
-        fallbacks.append(q_no)
-        fallbacks.append(f"{q_no} 헤어")
-        fallbacks.append(f"{q_no} 헤어샵")
+        fallbacks.extend([q_no, f"{q_no} 헤어", f"{q_no} 헤어샵"])
     fallbacks.append("미용실")
 
     uniq, seen = [], set()
@@ -521,14 +513,7 @@ def build_fallback_queries(chosen_query: str) -> List[str]:
     return uniq
 
 
-def search_salons_with_fallback(
-    *,
-    chosen_query: str,
-    x: float,
-    y: float,
-    radius_m: int,
-    size: int = 15,
-) -> Tuple[List[dict], str, int]:
+def search_salons_with_fallback(*, chosen_query: str, x: float, y: float, radius_m: int, size: int = 15) -> Tuple[List[dict], str, int]:
     queries = build_fallback_queries(chosen_query)
     radius_try = [radius_m, min(radius_m * 2, 20000)]
 
@@ -546,15 +531,24 @@ def search_salons_with_fallback(
 # =========================
 # 1) 선택 UI
 # =========================
-for k in ("tone", "face_shape", "brow_shape", "hair_type"):
+keys = (
+    "tone",
+    "face_shape",
+    "hair_type",
+    "preferred_length",
+    "mood",
+    "current_hair_length",
+    "bangs_status",
+    "styling_level",
+)
+for k in keys:
     if k not in st.session_state:
         st.session_state[k] = None
 
-steps_done = sum(1 for k in ("tone", "face_shape", "brow_shape", "hair_type") if st.session_state[k] is not None)
-st.progress(steps_done / 4)
+steps_done = sum(1 for k in keys if st.session_state[k] is not None)
+st.progress(steps_done / len(keys))
 
-# ---- tone
-st.header("1) 웜톤 / 쿨톤 선택")
+st.header("1) 웜톤 / 쿨톤 선택 (염색 컬러 추천용)")
 tone_cols = st.columns(2, gap="large")
 with tone_cols[0]:
     select_card(
@@ -580,22 +574,20 @@ with tone_cols[1]:
         img_width=130,
         selected=(st.session_state["tone"] == "쿨"),
     )
-
 if st.button("tone 초기화", key="reset_tone", type="secondary"):
     st.session_state["tone"] = None
     st.rerun()
 
 st.divider()
 
-# ---- face
 st.header("2) 얼굴형 선택")
 FACE_CHOICES = [
-    ("계란형", "계란형.png", "광대 X, 턱 X - 광대와 턱 골격이 이상적으로 잡혀있고 눈에 띄게 돌출되어 있지 않음."),
-    ("마름모형", "마름모형.png", "광대 O, 턱 X - 옆턱 골격은 없는데 광대만 부각됨."),
-    ("하트형", "하트형.png", "광대 O 턱 △ - 광대 골격과 턱 골격이 모두 있는데 광대 골격이 턱 골격보다 넓고 강함."),
-    ("땅콩형", "땅콩형.png", "광대 O 턱 O - 광대 골격과 턱 골격이 모두 있고, 하트형과 다르게 광대 골격과 턱 골격의 너비가 같음."),
-    ("육각형", "육각형.png", "광대 X 턱 O - 턱 골격만 있고 땅콩형과는 다르게 옆으로 튀어나온 광대 골격이 없음."),
-    ("둥근형", "둥근형.png", "광대 X 턱 X - 얼굴 전체적으로 살이 많아 테투리에 골격이 잘 보이지 않음."),
+    ("계란형", "계란형.png", "광대 X, 턱 X - 광대와 턱 골격이 두드러지지 않음"),
+    ("마름모형", "마름모형.png", "광대 O, 턱 X - 광대가 부각됨"),
+    ("하트형", "하트형.png", "광대 O 턱 △ - 광대가 넓고 턱이 상대적으로 좁음"),
+    ("땅콩형", "땅콩형.png", "광대 O 턱 O - 광대와 턱 골격이 모두 있음"),
+    ("육각형", "육각형.png", "광대 X 턱 O - 턱선이 각진 편"),
+    ("둥근형", "둥근형.png", "광대 X 턱 X - 전체적으로 둥근 인상"),
 ]
 rows = [FACE_CHOICES[:3], FACE_CHOICES[3:]]
 for r_i, r in enumerate(rows):
@@ -613,45 +605,13 @@ for r_i, r in enumerate(rows):
                 img_width=160,
                 selected=(st.session_state["face_shape"] == name),
             )
-
 if st.button("face_shape 초기화", key="reset_face", type="secondary"):
     st.session_state["face_shape"] = None
     st.rerun()
 
 st.divider()
 
-# ---- brow
-st.header("3) 눈썹 모양 선택")
-BROW_CHOICES = [
-    ("아치형", "아치형.png"),
-    ("직선형", "직선형.png"),
-    ("각진형", "각진형.png"),
-    ("둥근형", "둥근형(눈썹).png"),
-]
-brow_rows = [BROW_CHOICES[:2], BROW_CHOICES[2:]]
-for r_i, r in enumerate(brow_rows):
-    cols = st.columns(2, gap="large")
-    for col, (name, img) in zip(cols, r):
-        with col:
-            select_card(
-                title=name,
-                image_path=img,
-                button_label=f"✅ {name} 선택",
-                on_click_value=name,
-                session_key="brow_shape",
-                button_key=f"btn_brow_{r_i}_{name}",
-                img_width=130,
-                selected=(st.session_state["brow_shape"] == name),
-            )
-
-if st.button("brow_shape 초기화", key="reset_brow", type="secondary"):
-    st.session_state["brow_shape"] = None
-    st.rerun()
-
-st.divider()
-
-# ---- hair
-st.header("4) 모발 타입 선택")
+st.header("3) 모발 타입 선택")
 hair_cols = st.columns(2, gap="large")
 with hair_cols[0]:
     select_card(
@@ -675,10 +635,53 @@ with hair_cols[1]:
         img_width=100,
         selected=(st.session_state["hair_type"] == "곱슬"),
     )
-
 if st.button("hair_type 초기화", key="reset_hair", type="secondary"):
     st.session_state["hair_type"] = None
     st.rerun()
+
+st.divider()
+
+st.header("4) 기장 선호도 선택")
+st.session_state["preferred_length"] = st.radio(
+    "원하는 전체 기장 느낌을 선택하세요.",
+    options=["짧게", "중간", "길게"],
+    index=["짧게", "중간", "길게"].index(st.session_state["preferred_length"]) if st.session_state["preferred_length"] else 1,
+    horizontal=True,
+)
+
+st.header("5) 원하는 이미지/무드 선택")
+st.session_state["mood"] = st.selectbox(
+    "원하는 분위기를 선택하세요.",
+    options=MOOD_CHOICES,
+    index=MOOD_CHOICES.index(st.session_state["mood"]) if st.session_state["mood"] in MOOD_CHOICES else 0,
+)
+
+st.header("6) 현재 머리 길이")
+length_options = ["숏", "단발", "중단발", "장발"]
+st.session_state["current_hair_length"] = st.radio(
+    "현재 길이를 선택하세요.",
+    options=length_options,
+    index=length_options.index(st.session_state["current_hair_length"]) if st.session_state["current_hair_length"] in length_options else 1,
+    horizontal=True,
+)
+
+st.header("7) 앞머리 유무")
+bang_options = ["앞머리 있음", "앞머리 없음", "만들 의향 있음"]
+st.session_state["bangs_status"] = st.radio(
+    "앞머리 상태를 선택하세요.",
+    options=bang_options,
+    index=bang_options.index(st.session_state["bangs_status"]) if st.session_state["bangs_status"] in bang_options else 0,
+    horizontal=True,
+)
+
+st.header("8) 스타일링 난이도 선호")
+styling_options = ["손질 거의 안 함", "보통", "스타일링 가능"]
+st.session_state["styling_level"] = st.radio(
+    "평소 스타일링 가능 수준을 선택하세요.",
+    options=styling_options,
+    index=styling_options.index(st.session_state["styling_level"]) if st.session_state["styling_level"] in styling_options else 1,
+    horizontal=True,
+)
 
 st.divider()
 
@@ -686,64 +689,71 @@ st.divider()
 # =========================
 # 5) GPT 추천(3개)
 # =========================
-st.header("5) GPT 추천 키워드 3개(실존 스타일 용어)")
+st.header("9) GPT 추천 키워드 3개(실존 스타일 용어)")
 
 tone = st.session_state["tone"]
 face_shape = st.session_state["face_shape"]
-brow_shape = st.session_state["brow_shape"]
 hair_type = st.session_state["hair_type"]
+preferred_length = st.session_state["preferred_length"]
+mood = st.session_state["mood"]
+current_hair_length = st.session_state["current_hair_length"]
+bangs_status = st.session_state["bangs_status"]
+styling_level = st.session_state["styling_level"]
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("tone", tone or "-")
 m2.metric("face_shape", face_shape or "-")
-m3.metric("brow_shape", brow_shape or "-")
-m4.metric("hair_type", hair_type or "-")
+m3.metric("hair_type", hair_type or "-")
+m4.metric("mood", mood or "-")
 
-all_selected = all([tone, face_shape, brow_shape, hair_type])
+if tone:
+    st.info(f"🎨 톤 기반 염색 컬러 추천: {', '.join(TONE_COLOR_RECO.get(tone, []))}")
 
-hint_terms = build_auto_terms(face_shape)
+all_selected = all([
+    tone,
+    face_shape,
+    hair_type,
+    preferred_length,
+    mood,
+    current_hair_length,
+    bangs_status,
+    styling_level,
+])
+
+hint_terms = build_auto_terms(face_shape or "", preferred_length or "중간", mood or "단정한")
 
 if "gpt_queries" not in st.session_state:
     st.session_state["gpt_queries"] = []
 if "gpt_reasons" not in st.session_state:
     st.session_state["gpt_reasons"] = []
 
-gpt_btn = st.button(
-    "✨ GPT 추천 검색어 3개 만들기",
-    key="btn_make_gpt_queries",
-    use_container_width=True,
-    disabled=(not all_selected),
-)
+gpt_btn = st.button("✨ GPT 추천 검색어 3개 만들기", key="btn_make_gpt_queries", use_container_width=True, disabled=(not all_selected))
 
 if gpt_btn:
-    if not all_selected:
-        st.error("tone/face_shape/brow_shape/hair_type를 모두 선택해주세요.")
-    else:
-        try:
-            with st.spinner("GPT가 검색어 3개를 추천하는 중..."):
-                qs, rs = make_queries_with_openai(
-                    api_key=OPENAI_API_KEY,
-                    tone=tone,
-                    face_shape=face_shape,
-                    brow_shape=brow_shape,
-                    hair_type=hair_type,
-                    hint_terms=hint_terms,
-                )
-                st.session_state["gpt_queries"] = qs
-                st.session_state["gpt_reasons"] = rs
-        except Exception as e:
-            st.error(f"GPT 호출 오류: {e}")
+    try:
+        with st.spinner("GPT가 검색어 3개를 추천하는 중..."):
+            qs, rs = make_queries_with_openai(
+                api_key=OPENAI_API_KEY,
+                tone=tone,
+                face_shape=face_shape,
+                hair_type=hair_type,
+                preferred_length=preferred_length,
+                mood=mood,
+                current_hair_length=current_hair_length,
+                bangs_status=bangs_status,
+                styling_level=styling_level,
+                hint_terms=hint_terms,
+            )
+            st.session_state["gpt_queries"] = qs
+            st.session_state["gpt_reasons"] = rs
+    except Exception as e:
+        st.error(f"GPT 호출 오류: {e}")
 
 chosen_query = ""
 chosen_idx = 0
 if st.session_state["gpt_queries"]:
-    options = [f"🤖 GPT 추천 {i+1}: {q}" for i, q in enumerate(st.session_state["gpt_queries"])]
-    chosen = st.radio(
-        "아래 GPT 추천 키워드(3개) 중 하나로 1차 검색합니다.",
-        options=options,
-        index=0,
-        key="auto_query_radio",
-    )
+    options = [f"🤖 GPT 추천 {i + 1}: {q}" for i, q in enumerate(st.session_state["gpt_queries"])]
+    chosen = st.radio("아래 GPT 추천 키워드(3개) 중 하나로 1차 검색합니다.", options=options, index=0, key="auto_query_radio")
     chosen_idx = options.index(chosen)
     chosen_query = st.session_state["gpt_queries"][chosen_idx]
 
@@ -759,7 +769,7 @@ st.divider()
 # =========================
 # 6) Kakao Local 검색 + 웹후기 기반 확장검색
 # =========================
-st.header("6) (웹 후기 분석)으로 유명 스타일을 찾고 확장 검색하기")
+st.header("10) (웹 후기 분석)으로 유명 스타일을 찾고 확장 검색하기")
 
 address = st.text_input("내 위치(주소)를 입력해주세요 (예: 서울시 서대문구 연세로 50)", key="input_address")
 radius = st.slider("검색 반경(미터)", 500, 10000, 3000, step=500, key="radius_slider")
@@ -768,7 +778,6 @@ use_review_expansion = st.toggle("웹 후기 기반 확장검색 사용", value=
 topn_for_review = st.slider("후기 분석할 후보 개수(상위 N개)", 3, 15, 10, step=1)
 expansion_queries_n = st.slider("확장 검색어 개수", 1, 3, 3, step=1)
 
-st.subheader("검색 결과가 잘 나오게 하는 옵션")
 auto_fallback = st.toggle("검색어 자동 완화(fallback) 사용", value=True)
 result_size = st.slider("검색 결과 개수(size)", 5, 20, 15, step=1)
 
@@ -776,7 +785,7 @@ find_btn = st.button("📍 (1차+확장) 근처 미용실 찾기", key="btn_find
 
 if find_btn:
     if not all_selected:
-        st.error("tone/face_shape/brow_shape/hair_type를 모두 선택해주세요.")
+        st.error("모든 사용자 선택 항목을 완료해주세요.")
         st.stop()
     if not st.session_state["gpt_queries"] or not chosen_query.strip():
         st.error("먼저 GPT 추천 검색어(3개)를 생성하고 하나를 선택해주세요.")
@@ -791,21 +800,13 @@ if find_btn:
 
         with st.spinner("1차: 미용실 검색 중..."):
             if auto_fallback:
-                base_results, used_q, used_r = search_salons_with_fallback(
-                    chosen_query=chosen_query,
-                    x=x,
-                    y=y,
-                    radius_m=radius,
-                    size=result_size,
-                )
+                base_results, used_q, used_r = search_salons_with_fallback(chosen_query=chosen_query, x=x, y=y, radius_m=radius, size=result_size)
             else:
-                base_results = kakao_keyword_search(
-                    query=chosen_query, x=x, y=y, radius_m=radius, size=result_size, page=1
-                )
+                base_results = kakao_keyword_search(query=chosen_query, x=x, y=y, radius_m=radius, size=result_size, page=1)
                 used_q, used_r = chosen_query, radius
 
         if not base_results:
-            st.warning("검색 결과가 없어요. (자동 완화 옵션을 켜고 반경을 늘려보세요.)")
+            st.warning("검색 결과가 없어요. 자동 완화 옵션을 켜거나 반경을 늘려보세요.")
             st.stop()
 
         st.success(f"1차 검색 성공: '{used_q}' / 반경 {used_r}m / 결과 {len(base_results)}개")
@@ -814,17 +815,12 @@ if find_btn:
         style_map: Dict[str, Dict] = {}
         expanded_queries: List[str] = []
 
-        if use_review_expansion and base_results:
+        if use_review_expansion:
             candidates = base_results[:topn_for_review]
             area_hint = " ".join(address.strip().split()[:3]) or address.strip()
 
             with st.spinner("웹 후기(블로그/웹문서) 스니펫 수집 중..."):
-                snippets: Dict[str, str] = {}
-                for p in candidates:
-                    name = p.get("place_name", "")
-                    if not name:
-                        continue
-                    snippets[name] = build_review_snippet_for_place(name, area_hint)
+                snippets = {p.get("place_name", ""): build_review_snippet_for_place(p.get("place_name", ""), area_hint) for p in candidates if p.get("place_name", "")}
 
             with st.spinner("웹 후기 기반 유명 스타일 태그 분석(GPT)..."):
                 style_map = analyze_styles_from_reviews_with_openai(
@@ -834,36 +830,24 @@ if find_btn:
                     review_snippets=snippets,
                 )
 
-            expanded_queries = build_expanded_queries_from_tags(
-                chosen_query=chosen_query,
-                style_map=style_map,
-                max_queries=expansion_queries_n,
-            )
+            expanded_queries = build_expanded_queries_from_tags(chosen_query=chosen_query, style_map=style_map, max_queries=expansion_queries_n)
 
-            extra_lists: List[List[dict]] = []
             if expanded_queries:
                 with st.spinner("확장 검색어로 추가 검색 중..."):
+                    extra_lists = []
                     for q in expanded_queries:
                         if auto_fallback:
-                            res, _, _ = search_salons_with_fallback(
-                                chosen_query=q, x=x, y=y, radius_m=radius, size=result_size
-                            )
+                            res, _, _ = search_salons_with_fallback(chosen_query=q, x=x, y=y, radius_m=radius, size=result_size)
                             extra_lists.append(res)
                         else:
-                            extra_lists.append(
-                                kakao_keyword_search(query=q, x=x, y=y, radius_m=radius, size=result_size, page=1)
-                            )
+                            extra_lists.append(kakao_keyword_search(query=q, x=x, y=y, radius_m=radius, size=result_size, page=1))
                 merged_results = merge_places(base_results, *extra_lists)
 
         st.success(f"최종 결과 {len(merged_results)}개")
         if expanded_queries:
             st.write("확장 검색어(후기 기반):", ", ".join(expanded_queries))
 
-        map_points = [
-            {"lat": float(r["y"]), "lon": float(r["x"])}
-            for r in merged_results
-            if r.get("x") and r.get("y")
-        ]
+        map_points = [{"lat": float(r["y"]), "lon": float(r["x"])} for r in merged_results if r.get("x") and r.get("y")]
         if map_points:
             st.map(map_points, zoom=13)
 
@@ -883,7 +867,6 @@ if find_btn:
                 st.write(f"- 전화: {phone}")
             if url:
                 st.write(f"- 카카오맵: {url}")
-
             if use_review_expansion and name in style_map:
                 tags = style_map[name].get("tags", [])
                 summary = style_map[name].get("summary", "")
@@ -898,7 +881,7 @@ if find_btn:
 st.divider()
 
 if st.button("전체 선택/결과 초기화", key="reset_all", type="secondary"):
-    for k in ("tone", "face_shape", "brow_shape", "hair_type"):
+    for k in keys:
         st.session_state[k] = None
     st.session_state["gpt_queries"] = []
     st.session_state["gpt_reasons"] = []
