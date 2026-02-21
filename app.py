@@ -1,9 +1,9 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/app.py b/app.py
-index b81c18d1575a407ce51a26e0be8af700cad7235d..8568da8bf6b9fd4c24b7f0f5a048178bf3f481a6 100644
+index b81c18d1575a407ce51a26e0be8af700cad7235d..d6571cdeaa6b038676d7940fe5a38aaed575007c 100644
 --- a/app.py
 +++ b/app.py
-@@ -1,1568 +1,936 @@
+@@ -1,1568 +1,939 @@
 -import streamlit as st
 -import streamlit.components.v1 as components
 -from openai import OpenAI
@@ -321,9 +321,12 @@ index b81c18d1575a407ce51a26e0be8af700cad7235d..8568da8bf6b9fd4c24b7f0f5a048178b
 +# =========================
 +# 기본 설정
 +# =========================
++APP_VERSION = "2026.02.21-hotfix1"
++
 +st.set_page_config(page_title="얼굴형 기반 헤어스타일 추천", layout="wide")
 +st.title("얼굴형 기반 헤어스타일 + 미용실 추천")
 +st.caption("자가진단 선택 → GPT 추천 키워드 3개 → (웹 후기 기반 확장검색) → 근처 미용실 추천")
++st.caption(f"앱 버전: {APP_VERSION}")
 +
 +
 +# =========================
